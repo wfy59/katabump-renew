@@ -36,9 +36,9 @@ jobs:
 
     - name: ⚙ 设置代理
       env:
-        PROXY_NODE: ${{ secrets.PROXY_NODE }}
+        NODE_LINK: ${{ secrets.NODE_LINK }}
       run: |
-        if [ -z "$PROXY_NODE" ]; then
+        if [ -z "$NODE_LINK" ]; then
           echo "[INFO] 未配置代理，直连模式"
           exit 0
         fi
@@ -53,9 +53,9 @@ jobs:
         def mask(s):
             return f"{s[:2]}***{s[-2:]}" if len(s) > 4 else "****"
 
-        url = os.environ.get("PROXY_NODE", "").strip()
+        url = os.environ.get("NODE_LINK", "").strip()
         if not url:
-            print("[ERROR] PROXY_NODE 为空")
+            print("[ERROR] NODE_LINK 为空")
             sys.exit(1)
 
         if url.startswith("vless://"):
