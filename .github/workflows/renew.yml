@@ -2,7 +2,7 @@ name: Katabump Auto Renew
 
 on:
   schedule:
-  - cron: '0 2 */3 * *'  # 每天 UTC 0点 (北京时间 8点) 运行,根据服务到期时间自行修改
+  - cron: '0 2 */3 * *'  # 每 3 天 UTC 2点 (北京时间 10点) 运行,根据服务到期时间自行修改
   workflow_dispatch: # 允许手动触发
 
 jobs:
@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write  
-      contents: read
-    
+      contents: write # 由 read 改为 write：用于把运行时间记录提交回 README.md
+
     steps:
     - uses: actions/checkout@v6
     - name: ⚙ 设置 Python
@@ -42,7 +42,55 @@ jobs:
       run: |
         xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
           python3 app.py
-        
+
+    - name: 📝 记录本次运行时间到 README.md
+      if: always()
+      env:
+        RUN_STATUS: ${{ job.status }}
+      run: |
+        # 当前运行时间（北京时间）
+        RUN_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+        if [ "$RUN_STATUS" = "success" ]; then
+          ENTRY="- 🕒 ${RUN_TIME}（北京时间）✅ 续期成功"
+        else
+          ENTRY="- 🕒 ${RUN_TIME}（北京时间）❌ 运行${RUN_STATUS}"
+        fi
+
+        if [ ! -f README.md ]; then
+          # README.md 不存在：自动创建并写入运行记录区块
+          {
+            echo "# Katabump Auto Renew"
+            echo ""
+            echo "## 🕒 运行记录"
+            echo ""
+            echo "<!-- RUN_LOG -->"
+            echo "${ENTRY}"
+          } > README.md
+        elif grep -q '<!-- RUN_LOG -->' README.md; then
+          # 已有标记：在标记下方插入新记录（最新在最上面）
+          awk -v entry="${ENTRY}" '/<!-- RUN_LOG -->/{print; print entry; next}1' README.md > README.tmp && mv README.tmp README.md
+        else
+          # 无标记：在文件末尾追加运行记录区块（不影响已有内容）
+          {
+            echo ""
+            echo "## 🕒 运行记录"
+            echo ""
+            echo "<!-- RUN_LOG -->"
+            echo "${ENTRY}"
+          } >> README.md
+        fi
+
+        # 提交并推送（GITHUB_TOKEN 的 push 不会触发其他 workflow，无循环风险）
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add README.md
+        if git diff --staged --quiet; then
+          echo "README.md 无变化，跳过提交"
+        else
+          git commit -m "chore: 记录运行时间 ${RUN_TIME} [skip ci]"
+          git push
+        fi
+
     - name: 🧹 清理旧的工作流运行记录
       if: always()
       env:
